@@ -1,0 +1,113 @@
+:root {
+  --x: 50vw;
+  --y: 50vh;
+  --radius: 260px;      /* lantern reach, set from JS (scales with screen) */
+  --flicker: 1;         /* set from JS, ~0.9 – 1.0 */
+  --bg: #02040a;
+  --bg-deep: #000104;
+  --lit: #dbe9fb;
+  --glow: 90, 160, 255;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-deep);
+  overflow: hidden;
+  cursor: none;                 /* the lantern is the cursor */
+  touch-action: none;
+}
+
+.scene {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 50% 120%, #040b1a 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+}
+
+/* ---------- text layers ---------- */
+/* Both layers fill the whole screen, so the mask's x/y match the cursor */
+.text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  user-select: none;
+  padding: 0 1rem;
+}
+
+h1 {
+  font-size: clamp(2rem, 6.4vw, 5.6rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  max-width: 14em;
+  text-wrap: balance;
+}
+
+.lit {
+  color: var(--lit);
+  text-shadow: 0 0 28px rgba(var(--glow), 0.4);
+  /* only show where the lantern shines */
+  -webkit-mask-image: radial-gradient(
+    circle var(--radius) at var(--x) var(--y),
+    #000 0%, rgba(0,0,0,0.75) 35%, transparent 100%);
+          mask-image: radial-gradient(
+    circle var(--radius) at var(--x) var(--y),
+    #000 0%, rgba(0,0,0,0.75) 35%, transparent 100%);
+  opacity: var(--flicker);
+}
+
+/* ---------- lantern light ---------- */
+.glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle calc(var(--radius) * 1.5) at var(--x) var(--y),
+    rgba(var(--glow), 0.16) 0%,
+    rgba(var(--glow), 0.05) 40%,
+    transparent 100%);
+  mix-blend-mode: screen;
+  opacity: var(--flicker);
+}
+
+/* small bright core so you can see where the lantern is */
+.glow::after {
+  content: "";
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #eaf4ff;
+  box-shadow:
+    0 0 12px 4px rgba(var(--glow), 0.9),
+    0 0 40px 14px rgba(var(--glow), 0.45);
+}
+
+/* darkens the edges of the screen */
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 3, 0.8) 100%);
+}
+
+@media (hover: none) {
+  html, body { cursor: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow, .lit { transition: none; }
+}
