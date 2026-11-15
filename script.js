@@ -73,7 +73,7 @@
   let subV = 0, zoomAcc = 0, prevAlt = null, lastGlT = 0, underFac = 1;   // 0 above the water, 1 below (hides plankton and bubbles in the sky)
   window.__vf = { alt: null, exit: (p) => FX && FX.exit(p == null ? 1 : p), enter: (p) => FX && FX.enter(p == null ? 1 : p) };
 
-  /* ---------- plankton, bubbles, glowing creatures ---------- */
+  /* ---------- plankton and bubbles ---------- */
   const cv = $("#life"), ctx = cv.getContext("2d");
   let W = 0, H = 0;
   function size() {
@@ -93,37 +93,6 @@
     grd.addColorStop(0, "rgba(185,215,235,.9)"); grd.addColorStop(0.35, "rgba(160,195,225,.35)"); grd.addColorStop(1, "rgba(140,180,215,0)");
     g.fillStyle = grd; g.fillRect(0, 0, 64, 64); return c;
   })();
-  /* Deep-sea animals: each kind is painted once into a small off-screen picture, then stamped with additive blending (light adds up, as it does in dark water). */
-  const sprite = (w, h, fn) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.lineCap = "round"; g.lineJoin = "round"; fn(g); return c; };
-  const combSprite = sprite(128, 256, (g) => {                    // comb jelly: a clear body with rows of beating combs that split light into colours
-    const cx = 64, cy = 128, rx = 42, ry = 104;
-    const body = g.createRadialGradient(cx, cy, 4, cx, cy, ry); body.addColorStop(0, "hsla(195,70%,70%,.05)"); body.addColorStop(0.42, "hsla(195,80%,72%,.11)"); body.addColorStop(0.5, "hsla(195,80%,72%,0)");
-    g.save(); g.translate(cx, cy); g.scale(rx / ry, 1); g.translate(-cx, -cy); g.fillStyle = body; g.fillRect(-200, 0, 528, 256); g.restore();
-    g.strokeStyle = "hsla(195,90%,85%,.30)"; g.lineWidth = 1.2; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 6.283); g.stroke();
-    for (let r = 0; r < 5; r++) {
-      const u = -0.84 + r * 0.42;
-      for (let k = 0; k < 30; k++) {
-        const v = -0.92 + (k / 29) * 1.84, x = cx + rx * u * Math.sqrt(1 - v * v), y = cy + ry * v, w = 2.0 + 3.2 * Math.sqrt(1 - v * v) * (1 - 0.5 * Math.abs(u));
-        g.fillStyle = `hsla(${(k * 23 + r * 55) % 360},100%,72%,${(0.34 + 0.4 * Math.abs(Math.sin(k * 0.9 + r))).toFixed(2)})`;
-        g.fillRect(x - w, y - 0.9, 2 * w, 1.8);
-      }
-    }
-  });
-  const chainSprite = sprite(96, 512, (g) => {                    // siphonophore: a long colony, one bright float leading a string of lights
-    const xAt = (y) => 48 + 20 * Math.sin(y * 0.014 + 0.5) + 8 * Math.sin(y * 0.041);
-    g.strokeStyle = "hsla(200,80%,80%,.20)"; g.lineWidth = 1; g.beginPath();
-    for (let y = 22; y < 500; y += 6) g.lineTo(xAt(y), y);
-    g.stroke();
-    for (let y = 22, i = 0; y < 500; y += 9 + i * 0.25, i++) {
-      const k = 1 - y / 520, rad = (i === 0 ? 13 : 3 + 6 * k * (0.6 + 0.4 * Math.sin(i * 2.3))), x = xAt(y);
-      const gg = g.createRadialGradient(x, y, 0, x, y, rad), hue = i === 0 ? 30 : 185 + 40 * Math.sin(i * 0.7);
-      gg.addColorStop(0, `hsla(${hue},100%,84%,${(0.2 + 0.6 * k).toFixed(2)})`); gg.addColorStop(0.3, `hsla(${hue},100%,70%,${(0.28 * k).toFixed(2)})`); gg.addColorStop(1, `hsla(${hue},100%,60%,0)`);
-      g.fillStyle = gg; g.fillRect(x - rad, y - rad, 2 * rad, 2 * rad);
-    }
-  });
-  const KINDS = [combSprite, chainSprite];
-  const glows = Array.from({ length: 6 }, (_, i) => { const kind = i % 2; return mk({ z: rnd(0.45, 1), kind, size: kind === 1 ? rnd(0.36, 0.56) : rnd(0.10, 0.17), rot: rnd(-3.14, 3.14), vr: rnd(-0.05, 0.05), ph: rnd(0, 6.28), sp: rnd(0.7, 1.3) }); });
-
   let depth = 0, lastY = scrollY, lastT = 0;
   const ZOOMRATE = Math.log(2.6);   // matches the cards: scrolling a screen shrinks things by 2.6x (the camera pulls away from them)
   // advance a dot's scale with the scroll; when it shrinks into the distance it comes back large at the edge (and the reverse when scrolling up)
@@ -152,28 +121,6 @@
       const k = (p.r * p.z * 3.2 + 2.2) * (0.5 + 0.5 * Math.min(p.s, 1.6)), x = px(p), y = py(p);
       ctx.globalAlpha = a;
       for (let j = 0; j < 3; j++) { const o = p.fl[j]; ctx.drawImage(flake, x + o[0] * k - k, y + o[1] * k - k, 2 * k * o[2], 2 * k * o[2]); }
-    }
-    // animals of the deep: they drift, turn slowly and pulse; like everything else they recede as you sink past them
-    if (deep > 0.01) {
-      const sparse = clamp((depth - 900) / 3600);                       // thin out toward the abyss
-      const keep = Math.round(glows.length * (1 - 0.72 * sparse));
-      ctx.globalCompositeOperation = "lighter";
-      for (let gi = 0; gi < glows.length; gi++) {
-        const g = glows[gi], f = zoomStep(g, dy);
-        if (gi >= keep) continue;
-        const ts = t / 1000;
-        g.rot += g.vr * dt / 1000;
-        g.x += Math.sin(g.rot) * dt * 0.0000040; g.y -= Math.cos(g.rot) * dt * 0.0000040;   // swimming slowly the way it points
-        const beat = Math.sin(ts * g.sp * 0.6 + g.ph);
-        const a = (0.78 + 0.22 * beat) * deep * f * (1 - 0.3 * sparse) * (0.5 + 0.5 * g.z);
-        if (a < 0.01) continue;
-        const img = KINDS[g.kind], hgt = g.size * H * (0.35 + 0.65 * Math.min(g.s, 2)), wid = hgt * img.width / img.height;
-        ctx.save(); ctx.translate(px(g), py(g)); ctx.rotate(g.rot);
-        ctx.globalAlpha = Math.min(1, a);
-        ctx.drawImage(img, -wid / 2, -hgt / 2, wid, hgt);
-        ctx.restore();
-      }
-      ctx.globalCompositeOperation = "source-over";
     }
     ctx.globalAlpha = 1;
   }
