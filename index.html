@@ -4,27 +4,171 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Viperfish - Open Weight Models</title>
-  <meta name="description" content="Viperfish: small open weight language models. Something big is coming.">
-  <meta name="theme-color" content="#010309">
+  <meta name="description" content="Viperfish: a family of small open weight language models. Sunlight, Twilight, Midnight and Hadal. Scroll to begin descent.">
+  <meta name="theme-color" content="#0f4c81">
+  <meta property="og:title" content="Viperfish - Open Weight Models">
+  <meta property="og:description" content="Open weight language models, by depth. Scroll to begin descent.">
+  <meta property="og:type" content="website">
   <link rel="icon" href="favicon.ico?v=2" sizes="48x48">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=2">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
   <link rel="stylesheet" href="style.css">
+  <script>
+    /* Plays the "rise from the seafloor" intro on a fresh visit only */
+    (function () {
+      var d = document.documentElement; d.classList.add('js');
+      var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+      var back = nav && nav.type === 'back_forward';
+      var internal = false;
+      try { internal = !!document.referrer && new URL(document.referrer).host === location.host; } catch (e) {}
+      var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!back && !reduce && (location.hash === '#dive' || (!location.hash && !internal))) {
+        d.classList.add('dive'); window.__dive = true;
+        try { history.scrollRestoration = 'manual'; } catch (e) {}   /* don't let the browser restore an old scroll position */
+        setTimeout(function () { d.classList.remove('dive'); }, 2500);  /* failsafe */
+      }
+    })();
+  </script>
 </head>
 <body>
-  <main class="scene" id="scene">
+  <!-- Backdrop: colour changes with depth (script.js) -->
+  <div class="sea" id="sea" aria-hidden="true"></div>
+  <canvas id="ocean" aria-hidden="true"></canvas>
+  <div class="rays" id="rays" aria-hidden="true"></div>
+  <canvas id="life" aria-hidden="true"></canvas>
 
-    <!-- Lit copy: only revealed inside the lantern's glow -->
-    <div class="text lit">
-      <h1>Something big is coming.</h1>
-    </div>
+  <!-- Depth gauge -->
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <aside class="gauge" aria-hidden="true">
+    <div class="gauge-read"><span id="depth">0</span><small> m</small></div>
+    <div class="gauge-zone" id="zone">Surface</div>
+    <div class="gauge-press" id="press">1 atm</div>
+    <div class="gauge-track" id="track"><div class="gauge-fill" id="gfill"></div></div>
+  </aside>
+  <button class="sound" id="sound" type="button" aria-pressed="false" aria-label="Turn ambient sound on or off">Sound off</button>
 
-    <!-- The glow of the lantern itself -->
-    <div class="glow" aria-hidden="true"></div>
-    <div class="vignette" aria-hidden="true"></div>
+  <header class="top"><a href="#intro" class="wordmark">Viperfish</a></header>
+
+  <main>
+    <!-- ================= SURFACE ================= -->
+    <section class="intro" id="intro" data-d0="0" data-d1="0" data-name="Surface">
+      <!-- Sky above the waterline: scrolls away as you dive -->
+      <div class="sky" aria-hidden="true">
+        <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div>
+        <div class="sun"></div>
+        <div class="waves">
+          <svg class="wave back" viewBox="0 0 1200 40" preserveAspectRatio="none"><path d="M0 22 Q150 2 300 22 T600 22 T900 22 T1200 22 V40 H0 Z"/></svg>
+          <svg class="wave front" viewBox="0 0 1200 40" preserveAspectRatio="none"><path d="M0 24 Q150 8 300 24 T600 24 T900 24 T1200 24 V40 H0 Z"/></svg>
+        </div>
+      </div>
+      <div class="glint" aria-hidden="true"></div>
+      <div class="inner center reveal">
+        <p class="eyebrow">#1 in local specialized Mac app development</p>
+        <h1>Viperfish</h1>
+        <p class="lede">Scroll to begin descent</p>
+      </div>
+    </section>
+
+    <!-- ================= SUNLIGHT ================= -->
+    <!-- TODO before Nov 15: confirm size, blurb and links for every model below -->
+    <section class="zone model" id="sunlight" style="--accent:#ffe08a" data-d0="0" data-d1="200" data-name="Sunlight zone">
+      <div class="inner reveal">
+        <p class="eyebrow">Sunlight zone · 0–200 m</p>
+        <h2>Viperfish <em>Sunlight</em></h2>
+        <p class="blurb">The lightest model in the family. Light, quick, and made to run anywhere.</p>
+        <dl class="specs">
+          <div><dt>Parameters</dt><dd>1.5B</dd></div>
+          <div><dt>Released</dt><dd>Nov 15, 2026</dd></div>
+        </dl>
+        <p class="links">
+          <a class="btn" href="https://huggingface.co/viperdevAI/Viperfish-Sunlight-1.5B">Hugging Face</a>
+          <a class="btn ghost" href="sunlight.html">Learn more</a>
+          <a class="btn ghost" href="https://github.com/viperdevAI/viperfish">GitHub</a>
+        </p>
+      </div>
+    
+      <p class="fact" data-at="0.18"><span class="fact-d">10 m</span>Nearly all of the ocean’s plants and algae live in this sunlit top layer. Everything else depends on them.</p>
+    </section>
+
+    <!-- ================= TWILIGHT ================= -->
+    <section class="zone model alt" id="twilight" style="--accent:#8fd0ff" data-d0="200" data-d1="1000" data-name="Twilight zone">
+      <div class="inner reveal">
+        <p class="eyebrow">Twilight zone · 200–1,000 m</p>
+        <h2>Viperfish <em>Twilight</em></h2>
+        <p class="blurb">Where the light starts to fade. Our 3B model, balanced between size and ability.</p>
+        <dl class="specs">
+          <div><dt>Parameters</dt><dd>3B</dd></div>
+          <div><dt>Releasing</dt><dd>Nov 21, 2026</dd></div>
+        </dl>
+        <p class="links">
+          <span class="btn soon" aria-disabled="true">Coming soon</span>
+          <a class="btn ghost" href="twilight.html">Learn more</a>
+          <a class="btn ghost" href="https://github.com/viperdevAI/viperfish">GitHub</a>
+        </p>
+      </div>
+    
+      <p class="fact" data-at="0.02"><span class="fact-d">200 m</span>Below 200 meters there is not enough light left for photosynthesis.</p>
+    </section>
+
+    <!-- ================= MIDNIGHT ================= -->
+    <section class="zone model" id="midnight" style="--accent:#9aa7ff" data-d0="1000" data-d1="4000" data-name="Midnight zone">
+      <div class="inner reveal">
+        <p class="eyebrow">Midnight zone · 1,000–4,000 m</p>
+        <p class="badge-row"><span class="badge">★ Flagship</span></p>
+        <h2>Viperfish <em>Midnight</em></h2>
+        <p class="blurb">Our flagship model. No sunlight reaches this far, and it's built for harder questions.</p>
+        <dl class="specs">
+          <div><dt>Parameters</dt><dd>7B</dd></div>
+          <div><dt>Releasing</dt><dd>Nov 28, 2026</dd></div>
+        </dl>
+        <p class="links">
+          <span class="btn soon" aria-disabled="true">Coming soon</span>
+          <a class="btn ghost" href="midnight.html">Learn more</a>
+          <a class="btn ghost" href="https://github.com/viperdevAI/viperfish">GitHub</a>
+        </p>
+      </div>
+    
+      <p class="fact" data-at="0"><span class="fact-d">1,000 m</span>The midnight zone is where the light stops. Below this, no sunlight reaches at all.</p>
+      <p class="fact" data-at="0.80"><span class="fact-d">3,400 m</span>Almost the whole deep ocean sits just above freezing, between 2 and 4 °C.</p>
+    </section>
+
+        <!-- ================= ABYSSAL (open water, no card: fills the 4,000-6,000 m gap between Midnight and Hadal) ================= -->
+    <section class="abyss" id="abyssal" data-d0="4000" data-d1="6000" data-name="Abyssal zone">
+      <p class="fact" data-at="0.25"><span class="fact-d">4,500 m</span>Down here the water presses with more than 400 times the pressure at the surface.</p>
+    </section>
+
+<!-- ================= ABYSSAL ================= -->
+    <section class="zone model alt" id="hadal" style="--accent:#46ffd6" data-at="0.1" data-d0="6000" data-d1="11000" data-name="Hadal zone">
+      <div class="inner reveal">
+        <p class="eyebrow">Hadal zone · 6,000–11,000 m</p>
+        <h2>Viperfish <em>Hadal</em></h2>
+        <p class="blurb">The most powerful model in the family, built for heavy work and deep reasoning.</p>
+        <dl class="specs">
+          <div><dt>Parameters</dt><dd>14B</dd></div>
+          <div><dt>Releasing</dt><dd>TBD</dd></div>
+        </dl>
+        <p class="links">
+          <span class="btn soon" aria-disabled="true">Coming soon</span>
+          <a class="btn ghost" href="hadal.html">Learn more</a>
+          <a class="btn ghost" href="https://github.com/viperdevAI/viperfish">GitHub</a>
+        </p>
+      </div>
+    
+      <p class="fact" data-at="0.43"><span class="fact-d">8,200 m</span>The hadal zone is named after Hades, the Greek god of the underworld.</p>
+      <p class="fact" data-at="0.77"><span class="fact-d">9,800 m</span>Deeper than Everest is tall: the Challenger Deep reaches about 10,935 meters.</p>
+    </section>
+
+    <!-- ================= SEAFLOOR: no message here, the hull gives way as you arrive (script.js) ================= -->
+    <section class="bottom" id="bottom" aria-hidden="true" data-d0="11000" data-d1="11000" data-name="Seafloor"></section>
   </main>
+
+  <script src="ocean.js"></script>
+  <script src="splash.js"></script>
+  <script src="audio.js"></script>
+  <script src="voice.js"></script>
+  <script src="sub.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

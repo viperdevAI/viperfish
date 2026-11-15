@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viperfish Hadal — Viperfish</title>
+  <meta name="description" content="Viperfish Hadal: an open weight language model from the Viperfish family. The most powerful model in the family, built for heavy work and deep reasoning.">
+  <meta name="theme-color" content="#0f4c81">
+  <link rel="icon" href="favicon.ico?v=2" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=2">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+  <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+  <div class="sea" id="sea" aria-hidden="true"></div>
+  <canvas id="ocean" aria-hidden="true"></canvas>
+  <div class="rays" id="rays" aria-hidden="true"></div>
+  <canvas id="life" aria-hidden="true"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <aside class="gauge" aria-hidden="true">
+    <div class="gauge-read"><span id="depth">0</span><small> m</small></div>
+    <div class="gauge-zone" id="zone">Hadal zone</div>
+    <div class="gauge-press" id="press">1 atm</div>
+    <div class="gauge-track" id="track"><div class="gauge-fill" id="gfill"></div></div>
+  </aside>
+  <button class="sound" id="sound" type="button" aria-pressed="false" aria-label="Turn ambient sound on or off">Sound off</button>
+  <header class="top"><a href="index.html" class="wordmark">Viperfish</a></header>
+
+  <main>
+    <section class="zone detail" style="--accent:#46ffd6" data-d0="6000" data-d1="11000" data-name="Hadal zone">
+      <div class="inner reveal">
+        <p class="eyebrow">Hadal zone · 6,000–11,000 m</p>
+        <h1 class="model-title">Viperfish <em>Hadal</em></h1>
+        <p class="blurb">The most powerful model in the family, built for heavy work and deep reasoning.</p>
+        <dl class="specs">
+          <div><dt>Parameters</dt><dd>14B</dd></div>
+          <div><dt>Releasing</dt><dd>TBD</dd></div>
+          <div><dt>Depth</dt><dd>6,000–11,000 m</dd></div>
+        </dl>
+        <p class="links">
+          <span class="btn soon" aria-disabled="true">Coming soon</span>
+          <a class="btn ghost" href="https://github.com/viperdevAI/viperfish">GitHub</a>
+        </p>
+        <h3>Status</h3>
+        <p class="note">This model hasn't been released yet, and its release date isn't set. Watch the GitHub repo for news.</p>
+        <p class="links pager">
+          <a class="btn ghost" href="midnight.html">← Midnight</a>
+          <a class="btn ghost" href="index.html#dive">Back to the surface ↑</a>
+        </p>
+      </div>
+    </section>
+  </main>
+  <script src="ocean.js"></script>
+  <script src="splash.js"></script>
+  <script src="audio.js"></script>
+  <script src="sub.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viperfish Sunlight 1.5B: SwiftUI benchmarks and write-up — Viperfish</title>
+  <meta name="description" content="How Viperfish Sunlight 1.5B learned SwiftUI: the training, the benchmarks, and the trade-offs. Compiles 31 of 60 SwiftUI tasks, up from 16 for its base model.">
+  <meta name="theme-color" content="#0f4c81">
+  <link rel="icon" href="favicon.ico?v=2" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=2">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+  <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="article-mode">
+  <div class="sea" id="sea" aria-hidden="true"></div>
+  <canvas id="ocean" aria-hidden="true"></canvas>
+  <div class="rays" id="rays" aria-hidden="true"></div>
+  <canvas id="life" aria-hidden="true"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <aside class="gauge" aria-hidden="true">
+    <div class="gauge-read"><span id="depth">0</span><small> m</small></div>
+    <div class="gauge-zone" id="zone">Sunlight zone</div>
+    <div class="gauge-press" id="press">1 atm</div>
+    <div class="gauge-track" id="track"><div class="gauge-fill" id="gfill"></div></div>
+  </aside>
+  <button class="sound" id="sound" type="button" aria-pressed="false" aria-label="Turn ambient sound on or off">Sound off</button>
+  <header class="top"><a href="index.html" class="wordmark">Viperfish</a></header>
+
+  <main>
+    <section class="zone detail article-page" style="--accent:#ffe08a" data-d0="0" data-d1="200" data-name="Sunlight zone">
+      <article class="inner article">
+<p class="backlink"><a href="sunlight.html">← Sunlight</a><span>·</span><a href="index.html">All models</a></p>
+<p class="eyebrow">Sunlight zone · 1.5B · Technical write-up</p>
+<h1 class="model-title">Small enough to carry, good enough to <em>compile</em></h1>
+<p class="dek">How Viperfish Sunlight 1.5B learned SwiftUI, what the benchmarks say, and where it still falls short.</p>
+<p class="byline">Viperfish · November 15, 2026 · about a 25 minute read</p>
+
+<div class="glance">
+  <h2>At a glance</h2>
+  <ul>
+    <li><strong>SwiftUI: 31 of 60 tasks compile</strong>, up from 16 of 60 for the base model. That is almost double, and it is statistically solid (p ≈ 0.006).</li>
+    <li><strong>The biggest jump is on everyday work.</strong> Medium-difficulty SwiftUI tasks went from 6 of 24 to 15 of 24.</li>
+    <li><strong>Plain Swift is level:</strong> 14 of 33 against 13 of 33. Across all 93 Swift tasks, the score went from 29 to 45.</li>
+    <li><strong>It is a specialist.</strong> The price of the focus is general coding: on the Python HumanEval benchmark it scores 56.1% against the base model's 67.7%. The details are in the section on Python, below.</li>
+    <li><strong>It is small:</strong> 844 MB in 4-bit, trained on an 8 GB Mac, released under Apache-2.0.</li>
+  </ul>
+</div>
+
+<h2>Why a small model for Swift?</h2>
+<p>Most people who write Swift for a living write it on a Mac. That is a strange fact to keep in mind when you look at how code models are built and distributed. The default picture of a coding assistant is a large model running in a data center, answering over a network. That picture works well for a lot of people, and it has real costs for others: code leaves the machine, answers depend on a connection, usage is metered, and the model behind the service can change overnight.</p>
+<p>A model that runs locally changes those trade-offs. Nothing leaves the laptop. It works on a train, on a plane, and behind a company firewall. It costs nothing per request. It will give the same answer to the same prompt next year as it does today. The price you pay for these properties is capability, because a model small enough to run comfortably on a laptop is far smaller than the models behind the big hosted services.</p>
+<p>The question behind Viperfish Sunlight is how much of that capability gap you can win back by being narrow. A 1.5 billion parameter model cannot know everything. But it does not have to. If you are building an iPhone app, you do not need your assistant to be fluent in COBOL, Fortran, and a dozen shell dialects. You need it to know SwiftUI: the views, the modifiers, the property wrappers, the way state flows through an interface, and the many small API details that make the difference between code that compiles and code that does not.</p>
+<p>That last part matters more than it sounds. SwiftUI is a fast-moving, opinionated framework. Initializers change their argument labels between releases. Modifiers get renamed. Types that look like they should exist do not. A general-purpose small model has seen plenty of Swift, but a lot of what it has seen is old, and a lot of it is blended with patterns from other languages and other UI frameworks. The typical failure is not a wrong idea. It is a plausible-looking call to an API that does not exist, or that exists with a different signature. The compiler rejects the code, and the developer has to figure out why.</p>
+<p>Sunlight is an experiment in fixing exactly that, at a size that fits anywhere. It is the lightest model in the Viperfish family and the first to be released. It takes an existing, well-regarded small code model and teaches it more Swift and SwiftUI.</p>
+
+<h2>What Sunlight is</h2>
+<p>Viperfish Sunlight 1.5B is a LoRA fine-tune of Qwen2.5-Coder-1.5B-Instruct, the instruction-tuned 1.5 billion parameter code model from the Qwen team. We chose that model as a base for three reasons. It is good at code for its size. It is released under the Apache-2.0 license, which means a derivative can be released under the same terms. And its small footprint matches the goal: a model you can run on the machine you already own.</p>
+<p>The weights we are releasing are the base model with the fine-tuned adapter fused in, quantized to 4 bits for MLX, Apple's machine learning framework for Apple silicon. The result is a single 844 MB model. When we fused the adapter into the quantized base, we checked that the fused model reproduced the adapter's outputs on a set of 15 test prompts, and it matched on all 15.</p>
+<table class="spec">
+  <tbody>
+    <tr><th>Base model</th><td>Qwen2.5-Coder-1.5B-Instruct (Apache-2.0)</td></tr>
+    <tr><th>Method</th><td>LoRA fine-tune, rank 8, scale 20, applied to 16 layers</td></tr>
+    <tr><th>Training data</th><td>About 6,000 source files from The Stack v1 (deduplicated), mostly Swift, with the rest drawn from other languages</td></tr>
+    <tr><th>Training</th><td>6,164 iterations, sequence length 1,024, cosine learning-rate schedule from 5e-5, about 3.5 hours on an 8 GB M2 Mac</td></tr>
+    <tr><th>Validation loss</th><td>1.044 at the start, 0.850 at the end</td></tr>
+    <tr><th>Release format</th><td>MLX, 4-bit, 844 MB, adapter fused into the base</td></tr>
+    <tr><th>License</th><td>Apache-2.0</td></tr>
+  </tbody>
+</table>
+
+<h2>How it was trained</h2>
+<h3>The data</h3>
+<p>The training data comes from The Stack v1, the large public collection of permissively licensed source code assembled by the BigCode project. We used the deduplicated version, and from it we took Swift files, which account for most of the training set. The rest of the mix is a smaller sample of files in other languages, which we included so that the model would keep some of its general footing while it specialized.</p>
+<p>The files are raw source code. That is worth stating plainly, because it shapes what the model learned. The training text is not a collection of questions and answers in a chat format. It is code, as written by thousands of developers, in the form it takes in a repository. The model learned the patterns of Swift and SwiftUI the way a developer who reads a lot of code does: by seeing real code. It was not taught, in the training data, how to behave as an assistant. That behavior comes from the instruction-tuned base model, and as we will see later, there are small signs of the difference.</p>
+<p>The Stack is released with per-file licenses upstream, and its terms ask users not to redistribute the data itself. We follow that. The dataset is not part of this release, and the model card credits both The Stack and the Qwen team.</p>
+<h3>The method</h3>
+<p>We used LoRA, short for low-rank adaptation. Instead of updating all of the model's weights, LoRA freezes them and trains small additional matrices alongside selected layers. The additional matrices are tiny compared with the model, which has two consequences that matter here. Training fits on modest hardware: the whole run took about three and a half hours on an 8 GB M2 Mac. And the adapter can be applied at different strengths, scaled up or down, which turned out to be useful for experiments we describe below.</p>
+<p>The configuration is deliberately conservative: rank 8, a scale of 20, adapters on 16 layers, sequences up to 1,024 tokens, and a learning rate of 5e-5 on a cosine schedule. We trained for 6,164 iterations. The validation loss started at 1.044 and finished at 0.850. It was not a smooth curve: with a small validation set it bounced from reading to reading, dipping as low as 0.706 at iteration 2,000 and 0.771 at iteration 6,000. Loss on held-out code is only a rough guide to what we care about, which is whether the model writes Swift that compiles, so we judged the checkpoints by the benchmarks and not by the loss.</p>
+<p>A word on the hardware, because it is part of the point. Everything in this project, the training, the generation for every benchmark, and the scoring, ran on a single 8 GB Mac. That is the least capable machine in the story. If the workflow runs there, it runs on essentially any Apple silicon Mac sold in the last few years.</p>
+
+<h2>How we measured it</h2>
+<p>A fine-tune is only worth releasing if it measurably does something, and measuring a code model is harder than it looks. Benchmark numbers for code models can be hard to interpret: the tests may have leaked into training data, the prompts may be far from real work, or the comparison may be hard to repeat. We tried to build the evaluation so that it answers a practical question: when a developer asks for a piece of Swift, does the result work?</p>
+<p>We used three suites.</p>
+<h3>60 SwiftUI tasks</h3>
+<p>Each task asks the model to define a SwiftUI view with a specific name and a specific behavior, such as a view built around a magnification gesture, a refreshable list, a confirmation dialog with dynamic content, or an adaptive grid. The tasks are split by difficulty: 24 easy, 24 medium, and 12 hard.</p>
+<p>The score for a SwiftUI task is whether the model's code compiles. Specifically, we compile it with Xcode's own Swift compiler against the iOS 17 simulator SDK, and a task passes if the compiler accepts it. That is a real test and also a limited one, and the limitation is worth being clear about. Compiling is not the same as being correct. A view can compile and still look wrong or behave wrongly. What the test does measure is the thing small models struggle with most: using the real SwiftUI API, with real types, real initializers, and real modifiers. Code that does not compile cannot be run at all, so compilation is the necessary first step.</p>
+<h3>33 plain Swift tasks</h3>
+<p>The second suite checks general Swift, with no UI. These are 33 small programming tasks, 12 easy, 14 medium, and 7 hard. Here the test is stricter: the code is compiled and run, and it has to pass assertions about its behavior. This suite exists to answer a specific question. When we teach the model SwiftUI, does it get better at the language underneath, stay the same, or get worse?</p>
+<h3>HumanEval</h3>
+<p>The third suite is HumanEval, a widely used set of 164 Python programming problems. It is not about Swift at all. We include it for the opposite reason from the first two: it measures what a Swift specialization costs on a different language. We report it in full, and we discuss it below.</p>
+<h3>How the tasks were built and run</h3>
+<p>The Swift tasks were drafted with help from language models and then filtered. A task was kept only if its reference solution passed the same check that the model's answers would face: the compiler for SwiftUI tasks, and the compiler plus the assertions for plain Swift tasks. Tasks whose references failed were discarded. We generated every answer with greedy decoding, meaning no sampling and no randomness, so the results are repeatable: run the same model on the same prompt, with the same compiler and SDK, and you get the same answer.</p>
+<p>Two honest caveats. First, these are small test sets. Sixty tasks is enough to see a large effect, and we will say how confident we are, but a handful of tasks flipping either way would move a single number. We therefore pay attention to the pattern across many results more than to any single figure. Second, we wrote and curated these tasks ourselves. They are not an independent benchmark, and the numbers should be read as a measurement of this model against its own base on this particular suite, not as a ranking against other models. We did not compare against larger models, and we do not claim anything about how Sunlight stacks up against them.</p>
+
+<h2>Results: SwiftUI</h2>
+<p>This is the headline. On the 60 SwiftUI tasks, the base model compiled 16. Sunlight compiled 31.</p>
+<table class="bench">
+  <thead><tr><th>SwiftUI tasks that compile</th><th>Base</th><th>Sunlight</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><th>Easy (24 tasks)</th><td>8</td><td>13</td><td class="up">+5</td></tr>
+    <tr><th>Medium (24 tasks)</th><td>6</td><td>15</td><td class="up">+9</td></tr>
+    <tr><th>Hard (12 tasks)</th><td>2</td><td>3</td><td class="up">+1</td></tr>
+    <tr class="total"><th>All SwiftUI (60 tasks)</th><td>16</td><td>31</td><td class="up">+15</td></tr>
+  </tbody>
+</table>
+<div class="bars" aria-label="SwiftUI tasks that compile, out of 60">
+  <div class="bar-row"><span class="bar-label">Qwen2.5-Coder-1.5B-Instruct</span><span class="bar"><i style="width:26.7%"></i></span><span class="bar-val">16 / 60</span></div>
+  <div class="bar-row sun"><span class="bar-label">Viperfish Sunlight 1.5B</span><span class="bar"><i style="width:51.7%"></i></span><span class="bar-val">31 / 60</span></div>
+</div>
+<p>In percentage terms, the pass rate went from 26.7% to 51.7%. That is a gain of 25 percentage points, and the model nearly doubled its success rate on the task type it was trained for.</p>
+<h3>Is this real or noise?</h3>
+<p>With 60 tasks, it is a fair question. The cleanest way to answer it is to look at how individual tasks changed. Of the 60, 10 tasks compiled for both models. Twenty-one tasks compiled for Sunlight but not for the base model. Only 6 tasks went the other way, compiling for the base model but not for Sunlight. The remaining 23 failed for both.</p>
+<p>Twenty-one gains against 6 losses is a lopsided split. If the fine-tune had made no real difference, and the differences between the two models were just random flips, we would expect gains and losses to be roughly equal. A standard test for paired results of this kind, an exact test on the 27 tasks that changed, gives p ≈ 0.006. In plain language, a result this one-sided would be unlikely to appear by chance, and we are confident that the improvement is real.</p>
+<h3>Where the gains are</h3>
+<p>The table shows that the gains are not spread evenly. Medium-difficulty tasks improved the most: 6 of 24 became 15 of 24, which is two and a half times as many. Easy tasks improved by 5. Hard tasks moved from 2 to 3, which is too small a change to say anything about.</p>
+<p>This pattern fits what the fine-tune should be good for. Medium tasks are the bread and butter of app development: a list with swipe actions, a sheet with a hierarchy of views, an adaptive grid, a dialog with dynamic content. They need the right API calls, but not much exotic reasoning. That is the territory where knowing the framework matters most, and it is where Sunlight gained the most. The hard tasks involve unusual combinations, such as custom gesture handling, preference keys with animation, or the newer observation macros with derived values. A 1.5 billion parameter model is still limited there, and we would not describe Sunlight as a solution for the hardest SwiftUI problems.</p>
+<h3>What the compiler said</h3>
+<p>Because the score is a compiler verdict, we can look at why code failed. The base model's 44 failures and Sunlight's 29 failures can be grouped by what the compiler complained about. We grouped the messages with simple pattern matching, so the categories are approximate, but the shifts are large enough to be informative.</p>
+<table class="bench">
+  <thead><tr><th>Compile failures by kind</th><th>Base</th><th>Sunlight</th></tr></thead>
+  <tbody>
+    <tr><th>Wrong or extra arguments in a call</th><td>8</td><td>3</td></tr>
+    <tr><th>Member or modifier that does not exist</th><td>5</td><td>1</td></tr>
+    <tr><th>Unknown identifier or API</th><td>4</td><td>1</td></tr>
+    <tr><th>Protocol conformance problems</th><td>4</td><td>1</td></tr>
+    <tr><th>Syntax errors or truncated code</th><td>4</td><td>3</td></tr>
+    <tr><th>Generic type inference</th><td>3</td><td>1</td></tr>
+    <tr><th>Unknown type</th><td>2</td><td>7</td></tr>
+    <tr><th>Type mismatch</th><td>1</td><td>1</td></tr>
+    <tr><th>Other</th><td>13</td><td>11</td></tr>
+    <tr class="total"><th>Total failures</th><td>44</td><td>29</td></tr>
+  </tbody>
+</table>
+<p>The pattern is what you would hope for. The categories that reflect not knowing the real API, namely wrong arguments, members that do not exist, and unknown identifiers, all fell sharply. Wrong arguments went from 8 to 3, nonexistent members from 5 to 1, and unknown identifiers from 4 to 1. The model learned the shape of the framework.</p>
+<p>There is one category that went the other way, and we want to point it out because it is a real weakness. Failures from an unknown type rose from 2 to 7. In practice this means that Sunlight sometimes refers to a helper type, such as a row model or a custom shape, and fails to define it. The base model did this less often. We have not isolated the cause. One plausible explanation is that training on whole repository files taught the model to write code that assumes the rest of the project exists. In a single-file, self-contained task, that assumption is wrong. If you use Sunlight, asking explicitly for a self-contained answer helps.</p>
+<h3>A few examples</h3>
+<p>Numbers are one thing, and a concrete case is another. Here are two tasks the base model failed and Sunlight passed.</p>
+<p><strong>A magnification gesture.</strong> The task: define a view called <code>CoordinateSpaceView</code> with a magnification gesture and state. The base model wrote a gesture initializer with arguments that do not exist:</p>
+<pre><code>MagnificationGesture(scale: $scale, recognition: .continuous)
+    .onChanged { value in
+        scale = value
+    }</code></pre>
+<p>The compiler rejected it with "extra arguments at positions #1, #2 in call". That is the typical small-model failure: the shape is plausible and the signature is invented. Sunlight used the initializer that actually exists:</p>
+<pre><code>MagnificationGesture(minimumScaleDelta: 0.1)
+    .onChanged { value in
+        withAnimation {
+            scale = value
+        }
+    }</code></pre>
+<p>The code compiled. This is a hard task, and one of the three hard tasks Sunlight passed.</p>
+<p><strong>A list of strings.</strong> The task: a refreshable data view with a sheet and a complex hierarchy. The base model iterated over an array of strings with a <code>ForEach</code> that required each element to be identifiable, and the compiler objected that "String" does not conform to "Identifiable". It is a classic SwiftUI stumbling block, familiar to anyone who has learned the framework: you have to tell <code>ForEach</code> how to identify items. Sunlight handled it, and the code compiled.</p>
+<p>These are small details. But they are exactly the details that decide whether you spend your afternoon on your own idea or on the compiler's complaints.</p>
+
+<h2>Results: plain Swift</h2>
+<p>The second suite asks whether teaching the model SwiftUI changed its grasp of the Swift language itself. The answer is that it did not hurt, and it helped a little.</p>
+<table class="bench">
+  <thead><tr><th>Plain Swift tasks that pass</th><th>Base</th><th>Sunlight</th></tr></thead>
+  <tbody>
+    <tr><th>Easy (12 tasks)</th><td>4</td><td>5</td></tr>
+    <tr><th>Medium (14 tasks)</th><td>7</td><td>7</td></tr>
+    <tr><th>Hard (7 tasks)</th><td>2</td><td>2</td></tr>
+    <tr class="total"><th>All plain Swift (33 tasks)</th><td>13</td><td>14</td></tr>
+  </tbody>
+</table>
+<p>Fourteen against thirteen is not a difference we would claim as an improvement. A single task separates the two. What we take from it is the more modest and still useful conclusion that specializing in SwiftUI did not erode the model's performance on ordinary Swift, with runtime-checked tests. Together with the SwiftUI results, the total across all 93 Swift tasks moved from 29 to 45.</p>
+<table class="bench">
+  <thead><tr><th>Swift and SwiftUI, all 93 tasks</th><th>Base</th><th>Sunlight</th></tr></thead>
+  <tbody>
+    <tr><th>SwiftUI (60)</th><td>16</td><td>31</td></tr>
+    <tr><th>Plain Swift (33)</th><td>13</td><td>14</td></tr>
+    <tr class="total"><th>Total (93)</th><td>29</td><td>45</td></tr>
+  </tbody>
+</table>
+<p>In other words, for the language the model was built for, it solves 45 of 93 problems where the base model solved 29, a gain of more than half again as many.</p>
+
+<h2>The adapter at different strengths, and other runs</h2>
+<p>One of the advantages of LoRA is that the adapter's strength can be changed after training. We did not stop at one model. We trained and measured several variants, and they tell a consistent story about what the fine-tune does.</p>
+<table class="bench wide">
+  <thead><tr><th>Variant</th><th>SwiftUI (60)</th><th>Plain Swift (33)</th><th>HumanEval (164)</th></tr></thead>
+  <tbody>
+    <tr><th>Base model</th><td>16</td><td>13</td><td>67.7%</td></tr>
+    <tr class="total"><th>Sunlight, released (full strength)</th><td>31</td><td>14</td><td>56.1%</td></tr>
+    <tr><th>Adapter at half strength</th><td>23</td><td>12</td><td>61.6%</td></tr>
+    <tr><th>Second run with a replay of non-Swift data</th><td>26</td><td>10</td><td>56.7%</td></tr>
+    <tr><th>Third run with chat-format rehearsal</th><td>22</td><td>12</td><td>59.1%</td></tr>
+  </tbody>
+</table>
+<p>The first thing to notice is that every variant beats the base model on SwiftUI. The lowest-scoring one, 22, is still six tasks ahead of the base model's 16. The SwiftUI gain is not a fluke of one training run. It shows up whichever way we trained, and it grows with the strength of the adapter: half strength gives 23, full strength gives 31.</p>
+<p>The second thing to notice is that nothing beat the released model on Swift. We tried to find a better balance. The half-strength adapter keeps a good part of the SwiftUI gain, 23 of 60. The second run replayed a larger share of non-Swift data into training, and the third run resumed from the released adapter with a short round of chat-formatted rehearsal. Each of those attempts gave something up on the Swift side, and none of them gave back as much elsewhere as they cost. The released model is the strongest Swift model of the ones we trained, and we chose it for that reason.</p>
+<p>We also looked at earlier checkpoints from the main training run, in case stopping early would be better. It was not: the checkpoint at iteration 2,000 and the one at iteration 3,000 both scored lower on HumanEval than the final model, at 50.6% and 52.4%.</p>
+
+<h2>What about Python?</h2>
+<p>Sunlight is a Swift specialist, and a specialist gives up some breadth. This is the trade-off in the release, and we would rather lay it out in plain numbers than leave you to discover it.</p>
+<p>On HumanEval, the Python benchmark, the base model solves 111 of 164 problems, or 67.7%. Sunlight solves 92, or 56.1%. That is a drop of about 11.6 percentage points. Looking at individual problems, the base model solved 27 problems that Sunlight did not, and Sunlight solved 8 that the base model did not. Like the SwiftUI gain, this is a real difference, not noise.</p>
+<table class="bench">
+  <thead><tr><th>HumanEval (Python, 164 problems)</th><th>Solved</th><th>Rate</th></tr></thead>
+  <tbody>
+    <tr><th>Qwen2.5-Coder-1.5B-Instruct</th><td>111</td><td>67.7%</td></tr>
+    <tr class="total"><th>Viperfish Sunlight 1.5B</th><td>92</td><td>56.1%</td></tr>
+    <tr><th>Sunlight, adapter at half strength</th><td>101</td><td>61.6%</td></tr>
+  </tbody>
+</table>
+<p>What does this mean for you? It depends on what you use the model for. If your work is Swift and SwiftUI, this release is built for that, and the benchmark that reflects your work is the SwiftUI one. If you want one small model for Python scripts, data work, or general-purpose programming, the base Qwen2.5-Coder model is the better choice, and we would point you to it. Sunlight is not trying to replace it. It is trying to be better than it at one thing.</p>
+<p>We found some of the cause, and we do not understand all of it. The training data was raw source code with no chat template, so the model was never shown the format of a question followed by an answer. One visible consequence is that it closes its code fences much less often. When asked a HumanEval question, the base model finished its answer with a closing code fence in 161 of 164 cases, and Sunlight did so in 8. The code is still there, but the model tends to simply stop. That is a formatting habit and not a reasoning problem, and it is one reason we recommend stopping on the end-of-turn token and handling the output defensively, as described in the practical notes below. It is likely a part of the explanation for the drop, but we have not measured how much of it.</p>
+<p>The experiments in the previous section were our attempts to recover the Python score without paying for it in Swift. A half-strength adapter recovers about half of the lost Python points, from 56.1% to 61.6%, and it costs eight SwiftUI tasks. The other two runs recovered a little and lost more on the Swift side. We could not find a setting that kept the whole Swift gain and the whole Python score. There is a larger experiment we have not done: a higher-rank adapter over more layers, with a training mix built in a chat format, might change the balance. We chose to release what we had measured instead of waiting for what we hoped for.</p>
+
+<h2>Running it</h2>
+<p>The model is distributed in MLX format at 4 bits. The weights are 844 MB, which is small enough that the practical constraint on a Mac is not memory but patience for downloads. It is designed for Apple silicon, and the whole development process, including every benchmark run, happened on an 8 GB M2 Mac.</p>
+<p>We have not published latency numbers in this write-up, because we have not measured them in a controlled way, and a number from one machine on one afternoon would not tell you much. The practical experience on the 8 GB machine was that it was comfortable to generate with, but you should try it on your own hardware, with your own prompts.</p>
+<h3>Practical notes</h3>
+<ul>
+  <li><strong>Stop on the end token.</strong> The release includes a generation config with the end-of-turn tokens set. If you use a runtime that does not read it, make sure generation stops at the end-of-turn token, or the model may keep going.</li>
+  <li><strong>Ask for a self-contained answer.</strong> Given the unknown-type failures described above, prompts such as "define everything the view needs in the same file" give noticeably better results.</li>
+  <li><strong>Name the platform.</strong> Our SwiftUI tasks specify the target as iOS 17. Giving the model a target version in the prompt keeps it away from APIs that are too old or too new.</li>
+  <li><strong>Be ready for a missing closing fence.</strong> If you parse code out of the response, do not require a closing code fence. Take everything after the opening one.</li>
+  <li><strong>Compile it.</strong> This is true of any model. Treat the output as a draft and let the compiler be your first reviewer.</li>
+</ul>
+<pre><code>from mlx_lm import load, generate
+
+model, tokenizer = load("viperdevAI/Viperfish-Sunlight-1.5B")
+prompt = "Define a SwiftUI view called WeatherCard that shows a city name, a temperature and an SF Symbol. Make it self-contained and target iOS 17."
+print(generate(model, tokenizer, prompt=prompt, max_tokens=512))</code></pre>
+
+<h2>Who it is for</h2>
+<p>Sunlight is a good fit if you want a small, local assistant for Swift and SwiftUI. It is meant for sketching views, filling in boilerplate, translating an idea into a first draft, and answering the kind of questions where the right answer is a few lines of real API. It is also a good fit if you care about the properties of running locally: privacy, no per-request cost, and a model that behaves the same way tomorrow as today. And because the whole pipeline is built on open tools, it is a convenient starting point if you want to fine-tune further on your own code.</p>
+<p>It is not the right choice for every job. It is not a replacement for a large hosted model on hard architectural questions, long multi-file refactors, or anything that needs to reason across a large codebase. It is a small model with a context window to match. It will not outperform a much larger model on the hardest SwiftUI problems, and as the results show, three of the twelve hard tasks is what a 1.5 billion parameter model can offer. And as discussed above, it is not the model to choose for Python.</p>
+
+<h2>Limitations</h2>
+<p>We have tried to be clear throughout, and here is the list in one place.</p>
+<ul>
+  <li><strong>Compiling is not correctness.</strong> The SwiftUI score measures whether code compiles against the iOS 17 SDK. Code that compiles can still look wrong or behave wrongly.</li>
+  <li><strong>Small test sets.</strong> Sixty SwiftUI tasks and thirty-three plain Swift tasks are enough to show large effects, as the SwiftUI gain is, and not enough to resolve small ones, as with plain Swift.</li>
+  <li><strong>Our own benchmark.</strong> The Swift tasks were written and curated by us. They compare Sunlight with its own base model, and they are not an independent ranking against other models.</li>
+  <li><strong>General coding is weaker than the base.</strong> Python performance on HumanEval dropped from 67.7% to 56.1%, as covered above. We did not measure other languages beyond Swift and Python, and we would expect some of the same effect elsewhere.</li>
+  <li><strong>Invented helper types.</strong> The model more often references types it never defines.</li>
+  <li><strong>Formatting habits.</strong> It frequently omits the closing code fence.</li>
+  <li><strong>Limited on hard problems.</strong> Three of twelve hard SwiftUI tasks compiled.</li>
+  <li><strong>Training data.</strong> The model was trained on public code under various licenses, using The Stack v1. Its output can resemble code in the training set, so treat it as you would any code of uncertain origin.</li>
+</ul>
+
+<h2>Frequently asked questions</h2>
+<h3>Is the SwiftUI improvement just a result of the model memorizing the benchmark?</h3>
+<p>We have no evidence of that, and we took care to avoid it. The training data came from public repositories, not from our benchmark tasks, and the evaluation tasks were written separately. But we cannot rule out that some SwiftUI patterns appear in both, because SwiftUI code is repetitive by nature. That is partly the point of the fine-tune, which is to learn the patterns. The more reliable evidence is the shape of the improvement: the fall in invented arguments and members is what you would expect from learning the real API, and it is what we observe.</p>
+<h3>Why not train on more data for longer?</h3>
+<p>We were working on a single 8 GB Mac, and that limits how large the training run can be. The larger models in the Viperfish family are where we will put more compute. It is also true that more data would not by itself resolve the trade-off with Python: the answer to that is more likely to be in how the training mix is built.</p>
+<h3>Why release a model that is worse at Python than its base?</h3>
+<p>Because it is better at the thing it is for, and because we think it is more useful to you to know both numbers. A specialist model is a deliberate trade, and the decision of whether the trade is right for your work is yours. We have published both results, so you can make it.</p>
+<h3>Can I fine-tune it further?</h3>
+<p>Yes. The license is Apache-2.0, the base is open, and the method is a standard LoRA recipe, with the settings listed in the table near the top of this article. You can apply the same recipe to your own code.</p>
+<h3>Which license applies?</h3>
+<p>The released weights are under Apache-2.0, the same license as the base model, which we credit to the Qwen team. The training data, The Stack v1, is not redistributed with the model, and the licenses of the original files upstream still apply to that data.</p>
+
+<h2>What comes next</h2>
+<p>Sunlight is the first model in the Viperfish family, and the family is named for the depth zones of the ocean for a reason: each model goes deeper than the last. Twilight, at around 3 billion parameters, is scheduled for November 21. Midnight, the flagship at 7 billion parameters, follows on November 28, and Hadal, the largest, does not have a date yet. The lessons from Sunlight carry forward. The most important one is that the balance between specialization and breadth is set by how the training mix is built, and the larger models will give us more room to work on that.</p>
+<p>In the meantime, the one-line summary of this release is short. If you write SwiftUI on a Mac and want a model that fits on it, Sunlight compiles about twice as many of our SwiftUI tasks as its base model, it is honest about what it gives up to do that, and it is free to use.</p>
+<p class="note">The model is on Hugging Face. We would like to hear what you build with it, and where it fails, since the failures are what the next model will be trained to fix.</p>
+
+        <p class="links pager">
+          <a class="btn ghost" href="sunlight.html">← Sunlight</a>
+          <a class="btn ghost" href="index.html">All models</a>
+          <a class="btn ghost" href="twilight.html">Dive deeper: Twilight →</a>
+        </p>
+      </article>
+    </section>
+  </main>
+  <script src="ocean.js"></script>
+  <script src="splash.js"></script>
+  <script src="audio.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
